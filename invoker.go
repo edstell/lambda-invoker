@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	awsreq "github.com/aws/aws-sdk-go/aws/request"
@@ -91,6 +92,15 @@ func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage) (json.RawMes
 // AsProcedure adds input and output mutators to modify the requests and
 // responses to adhere to the lambda-router protocol.
 func AsProcedure(procedure string, unmarshalError func(json.RawMessage) error) Option {
+	if unmarshalError == nil {
+		unmarshalError = func(e json.RawMessage) error {
+			var i interface{}
+			if err := json.Unmarshal(e, &i); err != nil {
+				return errors.New(string(e))
+			}
+			return errors.New(fmt.Sprint(i))
+		}
+	}
 	return func(i *Invoker) {
 		// Add an input mutator which marshals the request as a router.Request.
 		i.InputMutators = append(i.InputMutators, func(input *lambda.InvokeInput) (*lambda.InvokeInput, error) {
