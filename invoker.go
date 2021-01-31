@@ -89,8 +89,9 @@ func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage) (json.RawMes
 	return output.Payload, nil
 }
 
-// AsProcedure adds input and output mutators to modify the requests and
-// responses to adhere to the lambda-router protocol.
+// AsProcedure configures invocation to wrap payloads in router.Request/Response
+// setting the Procedure field, and unmarshaling returned errors with the
+// unmarshaler.
 func AsProcedure(procedure string, unmarshalError func(json.RawMessage) error) Option {
 	if unmarshalError == nil {
 		unmarshalError = func(e json.RawMessage) error {
