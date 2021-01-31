@@ -28,10 +28,10 @@ type Error struct {
 // provides a convenient layer for middleware, as well as exposing a simpler
 // method to invoke a lambda function with.
 type Invoker struct {
-	li             LambdaInvoker
-	arn            string
-	InputMutators  []func(*lambda.InvokeInput) (*lambda.InvokeInput, error)
-	OutputMutators []func(*lambda.InvokeOutput) (*lambda.InvokeOutput, error)
+	li           LambdaInvoker
+	arn          string
+	MutateInput  func(*lambda.InvokeInput) (*lambda.InvokeInput, error)
+	MutateOutput func(*lambda.InvokeOutput) (*lambda.InvokeOutput, error)
 }
 
 // Option implementations can mutate the Invoker allowing configuration of how
@@ -43,6 +43,12 @@ func New(li LambdaInvoker, arn string, opts ...Option) *Invoker {
 	invoker := &Invoker{
 		li:  li,
 		arn: arn,
+		MutateInput: func(i *lambda.InvokeInput) (*lambda.InvokeInput, error) {
+			return i, nil
+		},
+		MutateOutput: func(o *lambda.InvokeOutput) (*lambda.InvokeOutput, error) {
+			return o, nil
+		},
 	}
 	for _, opt := range opts {
 		opt(invoker)
@@ -61,23 +67,17 @@ func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage) (json.RawMes
 		InvocationType: aws.String("RequestResponse"),
 		Payload:        body,
 	}
-	for _, mutate := range i.InputMutators {
-		i, err := mutate(input)
-		if err != nil {
-			return nil, err
-		}
-		input = i
+	input, err := i.MutateInput(input)
+	if err != nil {
+		return nil, err
 	}
 	output, err := i.li.InvokeWithContext(ctx, input)
 	if err != nil {
 		return nil, err
 	}
-	for _, mutate := range i.OutputMutators {
-		o, err := mutate(output)
-		if err != nil {
-			return nil, err
-		}
-		output = o
+	output, err = i.MutateOutput(output)
+	if err != nil {
+		return nil, err
 	}
 	if message := output.FunctionError; message != nil {
 		statusCode := int64(-1)
@@ -102,8 +102,7 @@ func AsProcedure(procedure string, unmarshalError func(json.RawMessage) error) O
 		}
 	}
 	return func(i *Invoker) {
-		// Add an input mutator which marshals the request as a router.Request.
-		i.InputMutators = append(i.InputMutators, func(input *lambda.InvokeInput) (*lambda.InvokeInput, error) {
+		i.MutateInput = func(input *lambda.InvokeInput) (*lambda.InvokeInput, error) {
 			bytes, err := json.Marshal(router.Request{
 				Procedure: procedure,
 				Body:      input.Payload,
@@ -113,10 +112,8 @@ func AsProcedure(procedure string, unmarshalError func(json.RawMessage) error) O
 			}
 			input.Payload = bytes
 			return input, nil
-		})
-		// Add an output mutator which will extract and return an error if the
-		// response contains one.
-		i.OutputMutators = append(i.OutputMutators, func(output *lambda.InvokeOutput) (*lambda.InvokeOutput, error) {
+		}
+		i.MutateOutput = func(output *lambda.InvokeOutput) (*lambda.InvokeOutput, error) {
 			if output.Payload == nil {
 				return output, nil
 			}
@@ -129,6 +126,6 @@ func AsProcedure(procedure string, unmarshalError func(json.RawMessage) error) O
 				return output, nil
 			}
 			return nil, unmarshalError(rsp.Error)
-		})
+		}
 	}
 }
