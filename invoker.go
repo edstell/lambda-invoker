@@ -60,7 +60,7 @@ func New(li LambdaInvoker, arn string, opts ...Option) *Invoker {
 // contains a FunctionError an Error is returned, wrapping the status code.
 // By default lambda functions are invoked as a 'RequestResponse', but
 // input mutators can be passed to change the InvocationType.
-func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage) (json.RawMessage, error) {
+func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage, opts ...awsreq.Option) (json.RawMessage, error) {
 	input := &lambda.InvokeInput{
 		FunctionName:   aws.String(i.arn),
 		InvocationType: aws.String("RequestResponse"),
@@ -69,7 +69,7 @@ func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage) (json.RawMes
 	if err := i.MutateInput(input); err != nil {
 		return nil, err
 	}
-	output, err := i.li.InvokeWithContext(ctx, input)
+	output, err := i.li.InvokeWithContext(ctx, input, opts...)
 	if err != nil {
 		return nil, err
 	}
