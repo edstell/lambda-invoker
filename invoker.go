@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	awsreq "github.com/aws/aws-sdk-go/aws/request"
@@ -87,19 +86,10 @@ func (i *Invoker) Invoke(ctx context.Context, body json.RawMessage) (json.RawMes
 	return output.Payload, nil
 }
 
-// AsProcedure configures invocation to wrap payloads in router.Request/Response
-// setting the Procedure field, and unmarshaling returned errors with the
-// unmarshaler.
+// AsProcedure returns an option which can be passed when initializing an
+// Invoker. If provided it will configure invocation to be performed as a call
+// to the named procedure.
 func AsProcedure(procedure string, unmarshalError func(json.RawMessage) error) Option {
-	if unmarshalError == nil {
-		unmarshalError = func(e json.RawMessage) error {
-			var i interface{}
-			if err := json.Unmarshal(e, &i); err != nil {
-				return errors.New(string(e))
-			}
-			return errors.New(fmt.Sprint(i))
-		}
-	}
 	return func(i *Invoker) {
 		i.MutateInput = func(input *lambda.InvokeInput) error {
 			bytes, err := json.Marshal(router.Request{
